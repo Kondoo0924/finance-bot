@@ -12,11 +12,11 @@ def get_calendar():
     try:
         r = requests.get(url, timeout=15)
         data = r.json()
-        today = datetime.now(pytz.timezone("America/New_York")).strftime("%m-%d-%Y")
+        today = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
         
         events = []
         for item in data:
-            if item.get("date", "") != today:
+            if not item.get("date", "").startswith(today):
                 continue
             if item.get("impact", "") not in ["High", "Medium"]:
                 continue
