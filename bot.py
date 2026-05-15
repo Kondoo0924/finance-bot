@@ -12,24 +12,26 @@ def get_calendar():
     try:
         r = requests.get(url, timeout=15)
         data = r.json()
+        
+        # 今天的日期（美東時間，格式 2026-05-15）
         today = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
+        print("比對日期: " + today)
         
         events = []
         for item in data:
-            if not item.get("date", "").startswith(today):
+            item_date = item.get("date", "")
+            # API 日期格式是 2026-05-15T09:15:00-04:00，取前10碼比對
+            if item_date[:10] != today:
                 continue
             if item.get("impact", "") not in ["High", "Medium"]:
                 continue
             
+            # 時間轉換
             try:
-                et_time = datetime.strptime(
-                    item["date"] + " " + item["time"], "%m-%d-%Y %I:%M%p"
-                )
-                et = pytz.timezone("America/New_York")
-                et_time = et.localize(et_time)
-                tw_time = et_time.astimezone(TAIWAN_TZ).strftime("%H:%M")
+                dt = datetime.fromisoformat(item_date)
+                tw_time = dt.astimezone(TAIWAN_TZ).strftime("%H:%M")
             except:
-                tw_time = item.get("time", "--")
+                tw_time = "--"
 
             events.append({
                 "time": tw_time,
@@ -42,7 +44,7 @@ def get_calendar():
         
         return events
     except Exception as e:
-        print(f"抓取失敗: {e}")
+        print("抓取失敗: " + str(e))
         return []
 
 def send_to_discord(events):
