@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import pytz
 import os
@@ -8,36 +7,49 @@ WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
 TAIWAN_TZ = pytz.timezone("Asia/Taipei")
 
 def get_calendar():
-    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    url = "https://economic-calendar.tradingview.com/events"
+    today = datetime.now(pytz.timezone("America/New_York"))
+    
+    params = {
+        "from": today.strftime("%Y-%m-%dT00:00:00+0000"),
+        "to": today.strftime("%Y-%m-%dT23:59:59+0000"),
+        "countries": "US,GB,EU,JP,CN,AU,CA,CH,DE",
+        "minImportance": 1,
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Origin": "https://www.tradingview.com",
+        "Referer": "https://www.tradingview.com/",
+    }
+    
     try:
-        r = requests.get(url, timeout=15)
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        print("狀態碼: " + str(r.status_code))
         data = r.json()
-        
-        today = datetime.now(pytz.timezone("America/New_York")).strftime("%Y-%m-%d")
-        print("比對日期: " + today)
-        
-        # 印出今天所有數據（不管 impact）
-        today_all = [item for item in data if item.get("date", "")[:10] == today]
-        print("今天共有 " + str(len(today_all)) + " 筆數據（含所有重要性）")
-        for item in today_all:
-            print("  -> " + item.get("impact","?") + " | " + item.get("title","?") + " | " + item.get("date","?"))
+        results = data.get("result", [])
+        print("回傳 " + str(len(results)) + " 筆數據")
         
         events = []
-        for item in today_all:
-            if item.get("impact", "") not in ["High", "Medium"]:
+        for item in results:
+            importance = item.get("importance", 0)
+            if importance < 1:  # 0=低, 1=中, 2=高
                 continue
+            
+            print("數據: " + str(importance) + " | " + item.get("title","?"))
+            
             try:
-                dt = datetime.fromisoformat(item.get("date",""))
+                dt = datetime.fromisoformat(item.get("date","").replace("Z", "+00:00"))
                 tw_time = dt.astimezone(TAIWAN_TZ).strftime("%H:%M")
             except:
                 tw_time = "--"
+            
             events.append({
                 "time": tw_time,
-                "currency": item.get("country", "--"),
+                "currency": item.get("currency", "--"),
                 "event": item.get("title", "--"),
-                "impact": item.get("impact", "--"),
-                "forecast": item.get("forecast", "--") or "--",
-                "previous": item.get("previous", "--") or "--",
+                "importance": importance,
+                "forecast": str(item.get("forecast_value") or "--"),
+                "previous": str(item.get("prev_value") or "--"),
             })
         
         return events
@@ -47,8 +59,8 @@ def get_calendar():
 
 def send_to_discord(events):
     today = datetime.now(TAIWAN_TZ).strftime("%Y/%m/%d")
-    imp_emoji = {"High": "🔴 高", "Medium": "🟡 中"}
-    imp_color = {"High": 15158332, "Medium": 16776960}
+    imp_emoji = {2: "🔴 高", 1: "🟡 中", 0: "⚪ 低"}
+    imp_color = {2: 15158332, 1: 16776960, 0: 8421504}
 
     header = {
         "embeds": [{
@@ -65,7 +77,7 @@ def send_to_discord(events):
         return
 
     for e in events:
-        imp = e["impact"]
+        imp = e["importance"]
         name_str = "🕐 " + e["time"] + "　" + e["currency"] + "　" + imp_emoji.get(imp, "⚪")
         value_str = "**" + e["event"] + "**\n前值: `" + e["previous"] + "`　➨　預測: `" + e["forecast"] + "`"
         embed = {
@@ -84,6 +96,8 @@ def send_to_discord(events):
 if __name__ == "__main__":
     print("開始抓取財經日曆...")
     events = get_calendar()
-    print("篩選後找到 " + str(len(events)) + " 筆 High/Medium 數據")
-    send_to_discord(events)
+    # 只保留中高重要性
+    high_events = [e for e in events if e["importance"] >= 1]
+    print("篩選後找到 " + str(len(high_events)) + " 筆中高影響數據")
+    send_to_discord(high_events)
     print("發送完成！")
