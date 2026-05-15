@@ -71,4 +71,9 @@ def send_to_discord(events):
             "embeds": [{
                 "color": imp_color.get(imp, 8421504),
                 "fields": [{
-                    "name": f"🕐 {e['time']}　{e['currency']}　{imp_emoji.get(i
+                    "name": "🕐 " + e["time"] + "　" + e["currency"] + "　" + imp_emoji.get(imp, "⚪"),
+                    "value": "**" + e["event"] + "**\n前值: `" + e["previous"] + "`　➨　預測: `" + e["forecast"] + "`",
+                    "inline": False
+                }]
+            }]
+        }
