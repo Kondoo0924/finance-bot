@@ -1,0 +1,25 @@
+name: 每日財經預警
+
+on:
+  schedule:
+    - cron: '0 22 * * *'  # UTC 22:00 = 台灣時間早上 06:00
+  workflow_dispatch:  # 允許手動觸發測試
+
+jobs:
+  send-calendar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 設定 Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+      
+      - name: 執行機器人
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python bot.py
