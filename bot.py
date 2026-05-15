@@ -21,10 +21,9 @@ def get_calendar():
             if item.get("impact", "") not in ["High", "Medium"]:
                 continue
             
-            # 時間轉換成台灣時間
             try:
                 et_time = datetime.strptime(
-                    f"{item['date']} {item['time']}", "%m-%d-%Y %I:%M%p"
+                    item["date"] + " " + item["time"], "%m-%d-%Y %I:%M%p"
                 )
                 et = pytz.timezone("America/New_York")
                 et_time = et.localize(et_time)
@@ -56,7 +55,7 @@ def send_to_discord(events):
             "title": "📊 今日高風險總經數據預警",
             "description": "⚠️ 今日有高影響力數據公布，請留意市場波動，嚴格控管合約倉位。",
             "color": 15158332,
-            "footer": {"text": f"{today} | 總經數據預警系統・請嚴格控管交易風險"}
+            "footer": {"text": today + " | 總經數據預警系統・請嚴格控管交易風險"}
         }]
     }
     requests.post(WEBHOOK_URL, json=header)
@@ -67,13 +66,36 @@ def send_to_discord(events):
 
     for e in events:
         imp = e["impact"]
+        name_str = "🕐 " + e["time"] + "　" + e["currency"] + "　" + imp_emoji.get(imp, "⚪")
+        value_str = "**" + e["event"] + "**\n前值: `" + e["previous"] + "`　➨　預測: `" + e["forecast"] + "`"
         embed = {
             "embeds": [{
                 "color": imp_color.get(imp, 8421504),
                 "fields": [{
-                    "name": "🕐 " + e["time"] + "　" + e["currency"] + "　" + imp_emoji.get(imp, "⚪"),
-                    "value": "**" + e["event"] + "**\n前值: `" + e["previous"] + "`　➨　預測: `" + e["forecast"] + "`",
+                    "name": name_str,
+                    "value": value_str,
                     "inline": False
                 }]
             }]
         }
+        requests.post(WEBHOOK_URL, json=embed)
+        print("已發送: " + e["event"])
+
+if __name__ == "__main__":
+    print("開始抓取財經日曆...")
+
+    # 診斷用：看 API 回傳什麼
+    r = requests.get("https://nfs.faireconomy.media/ff_calendar_thisweek.json", timeout=15)
+    data = r.json()
+    print("API 共回傳 " + str(len(data)) + " 筆本週數據")
+
+    today_et = datetime.now(pytz.timezone("America/New_York")).strftime("%m-%d-%Y")
+    print("今天美東日期: " + today_et)
+
+    dates = list(set([item.get("date", "") for item in data]))
+    print("API 裡有的日期: " + str(dates))
+
+    events = get_calendar()
+    print("篩選後找到 " + str(len(events)) + " 筆今日高影響數據")
+    send_to_discord(events)
+    print("發送完成！")
